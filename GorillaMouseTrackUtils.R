@@ -61,8 +61,10 @@ GorillaMouse.Import <- function(L, RawTraces=TRUE){
   MT<-mt_import_long(gorilla.traj, xpos_label="x",ypos_label="y",timestamps_label="time_stamp", add_labels= c("participant_id", "spreadsheet_row"),
                      mt_id_label=c("participant_id", "spreadsheet_row"))
   # add the information from the response file, so that conditions etc are integrated with traces
-  MT[['data']]<-MT[['data']] %>% tidyr::separate(col="mt_id", into=c("Participant.Private.ID", "Spreadsheet.Row"), sep="_") %>%
+  MT[['data']]<-MT[['data']] %>% tidyr::separate(col="mt_id", into=c("Participant.Private.ID", "Spreadsheet.Row"), sep="_", remove = FALSE) %>%
     inner_join(d, by=c("Participant.Private.ID", "Spreadsheet.Row"))
+  # make sure the rownames correspond to mt_id; otherwise plotting won't work!
+  rownames(MT[['data']]) <- MT[['data']]$mt_id
   return(MT)
 }
 
