@@ -16,9 +16,8 @@ library(ggplot2)
 #     MTpath: the path where the mouse traces live on your machine
 #     cols: the columns in the dataframe you need, MUST include Response
 #         (e.g. c("Participant.ID", "Trial.Number", "Spreadsheet.Row", "Response"))
-#     RawTraces: you have to choose to use the raw or the normalised traces. Default: raw
-# OUT: the mousetrap object with information about conditions etc
-GorillaMouse.ReadInTraces <- function(d, MTpath, cols, RawTraces=TRUE){
+# OUT: a list that contains (1) the raw read-in trajectories, and (2) the response data
+GorillaMouse.ReadInTraces <- function(d, MTpath, cols){
   oldpath <- getwd()
   # get the filenames in the right order from the response file
   d <- d %>% select(all_of(cols)) 
@@ -27,35 +26,60 @@ GorillaMouse.ReadInTraces <- function(d, MTpath, cols, RawTraces=TRUE){
   d <- d[(d$Response %like% ".xlsx")&(d$Response %like% "task"), ]
   setwd(MTpath)
   cat(sprintf("Reading in mouse traces from %s\n", MTpath))
-  cat(sprintf("Starting to import %d traces.",nrow(d)))
+  cat(sprintf("Starting to import %d traces.\n",nrow(d)))
   xlsx.df.list<-lapply(as.list(d$Response),read_excel)
   #Combine all these imported excel files into a single data frame. 
   gorilla.traj<-rbindlist(xlsx.df.list, fill=TRUE)
+  r<- list("dataset" = d, "trajectories" = gorilla.traj)
+  setwd(oldpath)
+  return(r)
+}
+
+# This function takes the raw trace data and imports it into a mousetrap object.
+# code adapted from https://support.gorilla.sc/support/walkthrough/rstudio#mousetrackingdatatoplotsinr
+# IN: L: output from GorillaMouse.ReadInTraces():
+#       a list that contains (1) the raw read-in trajectories, and (2) the response data
+#     RawTraces: you have to choose to use the raw or the normalised traces. Default: raw
+# OUT: the mousetrap object with information about conditions, performance etc.
+GorillaMouse.Import <- function(L, RawTraces=TRUE){
+  d <- L[[1]]
+  gorilla.traj <- L[[2]]
   #limit to only the mousetracking data
   gorilla.traj<-gorilla.traj[gorilla.traj$type=="mouse",]
-  
   if (RawTraces==TRUE){
     # to work with the raw traces, drop the normalised ones
+    cat("Working with raw traces.\n")
     gorilla.traj<-within(gorilla.traj,rm(x_normalised,y_normalised))
   } else if (RawTraces==FALSE){
     # to work with the normalised traces, drop the raw ones
+    cat("Working with normalised traces.\n")
     gorilla.traj<-within(gorilla.traj,rm(x,y))
   } else { 
     warning("RawTraces is not specified.")
-    }
-  
+  }
   # import into a mousetrap object
   MT<-mt_import_long(gorilla.traj, xpos_label="x",ypos_label="y",timestamps_label="time_stamp", add_labels= c("participant_id", "spreadsheet_row"),
                      mt_id_label=c("participant_id", "spreadsheet_row"))
   # add the information from the response file, so that conditions etc are integrated with traces
   MT[['data']]<-MT[['data']] %>% tidyr::separate(col="mt_id", into=c("Participant.Private.ID", "Spreadsheet.Row"), sep="_") %>%
     inner_join(d, by=c("Participant.Private.ID", "Spreadsheet.Row"))
-  
-  setwd(oldpath)
   return(MT)
 }
 
-# 2. Putting trace file names in order of participant and trial (default = alphabetical) 
+# making rectangles to use in plots
+# code adapted from https://support.gorilla.sc/support/walkthrough/rstudio#mousetrackingdatatoplotsinr
+# IN: traj: the raw read-in trajectories (output from GorillaMouse.ReadInTraces(), 2nd element in the list)
+#     ZoneNames: the names of the zones (start, destination) from the traj file
+# OUT: rectangles (the zones) that can be used for plotting later.
+GorillaMouse.MakeRectangles <- function(traj, ZoneNames){
+  matrix.data<-filter(traj, zone_name %in% ZoneNames)
+  matrix.data<-matrix.data[1:length(ZoneNames),c("zone_x","zone_y","zone_width","zone_height")]
+  rectangles<-as.matrix(sapply(matrix.data, as.numeric)) 
+  rectangles<-unname(rectangles)
+  return(rectangles)
+}
+
+# Putting trace file names in order of participant and trial (default = alphabetical) 
 # extract the trial number from the list of files, and order the list according to
 # ID and trial number
 ## ! Redundant for this purpose if you use the list based on the response file!
