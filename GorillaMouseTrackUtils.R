@@ -50,16 +50,21 @@ GorillaMouse.Import <- function(L, RawTraces=TRUE){
     # to work with the raw traces, drop the normalised ones
     cat("Working with raw traces.\n")
     gorilla.traj<-within(gorilla.traj,rm(x_normalised,y_normalised))
+    # import into a mousetrap object
+    MT<-mt_import_long(gorilla.traj, xpos_label="x",ypos_label="y",timestamps_label="time_stamp", add_labels= c("participant_id", "spreadsheet_row"),
+                       mt_id_label=c("participant_id", "spreadsheet_row"))
   } else if (RawTraces==FALSE){
     # to work with the normalised traces, drop the raw ones
     cat("Working with normalised traces.\n")
     gorilla.traj<-within(gorilla.traj,rm(x,y))
+    # import into a mousetrap object
+    MT<-mt_import_long(gorilla.traj, xpos_label="x_normalised",ypos_label="y_normalised",timestamps_label="time_stamp", add_labels= c("participant_id", "spreadsheet_row"),
+                       mt_id_label=c("participant_id", "spreadsheet_row"))
   } else { 
-    warning("RawTraces is not specified.")
+    warning("RawTraces is not specified.\nSet FALSE for normalised traces, TRUE for raw traces.")
   }
-  # import into a mousetrap object
-  MT<-mt_import_long(gorilla.traj, xpos_label="x",ypos_label="y",timestamps_label="time_stamp", add_labels= c("participant_id", "spreadsheet_row"),
-                     mt_id_label=c("participant_id", "spreadsheet_row"))
+
+  
   # add the information from the response file, so that conditions etc are integrated with traces
   MT[['data']]<-MT[['data']] %>% tidyr::separate(col="mt_id", into=c("Participant.Private.ID", "Spreadsheet.Row"), sep="_", remove = FALSE) %>%
     inner_join(d, by=c("Participant.Private.ID", "Spreadsheet.Row"))
@@ -73,9 +78,15 @@ GorillaMouse.Import <- function(L, RawTraces=TRUE){
 # IN: traj: the raw read-in trajectories (output from GorillaMouse.ReadInTraces(), 2nd element in the list)
 #     ZoneNames: the names of the zones (start, destination) from the traj file
 # OUT: rectangles (the zones) that can be used for plotting later.
-GorillaMouse.MakeRectangles <- function(traj, ZoneNames){
+GorillaMouse.MakeRectangles <- function(traj, ZoneNames, RawTraces=TRUE){
   matrix.data<-filter(traj, zone_name %in% ZoneNames)
-  matrix.data<-matrix.data[1:length(ZoneNames),c("zone_x","zone_y","zone_width","zone_height")]
+  if (RawTraces==TRUE){
+    matrix.data<-matrix.data[1:length(ZoneNames),c("zone_x","zone_y","zone_width","zone_height")]
+  } else if (RawTraces==FALSE){
+    matrix.data<-matrix.data[1:length(ZoneNames),c("zone_x_normalised","zone_y_normalised","zone_width_normalised","zone_height_normalised")]
+  } else { 
+    warning("RawTraces is not specified.\nSet FALSE for normalised traces, TRUE for raw traces.")
+  }
   rectangles<-as.matrix(sapply(matrix.data, as.numeric)) 
   rectangles<-unname(rectangles)
   return(rectangles)
